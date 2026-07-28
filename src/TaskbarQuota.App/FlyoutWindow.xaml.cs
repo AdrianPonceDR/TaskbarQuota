@@ -90,7 +90,7 @@ namespace TaskbarQuota
             _dashboardViewModel.SelectedCardChanged -= DashboardSelectedCardChanged;
             _dashboardViewModel.DetailContentWidthChanged -= DashboardDetailContentWidthChanged;
             _dashboardViewModel.DetailContentHeightChanged -= DashboardDetailContentHeightChanged;
-            _boundsUpdateTimer.Stop();
+            _boundsUpdateTimer?.Stop();
             _providerStripItems.Clear();
         }
 

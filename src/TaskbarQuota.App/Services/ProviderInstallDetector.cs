@@ -20,7 +20,7 @@ internal static class ProviderInstallDetector
     private static readonly ConcurrentDictionary<string, bool> CliAvailability = new(StringComparer.OrdinalIgnoreCase);
     private static volatile bool _cliCacheReady;
 
-    internal static Func<ProviderId, bool>? IsInstalledOverrideForTesting;
+    internal static Func<ProviderId, bool>? IsInstalledOverrideForTesting { get; set; }
 
     /// <summary>Precomputes CLI availability once so startup does not spawn many where.exe processes.</summary>
     public static void WarmCliCache()
