@@ -45,93 +45,8 @@ function Assert-DirectChild {
     }
 }
 
-function Copy-WindowsAppRuntimeNotificationResource {
-    param(
-        [Parameter(Mandatory = $true)][string]$AssetsPath,
-        [Parameter(Mandatory = $true)][string]$DestinationDirectory
-    )
-
-    if (-not (Test-Path -LiteralPath $AssetsPath -PathType Leaf)) {
-        throw "NuGet assets file was not produced: $AssetsPath"
-    }
-
-    $assets = Get-Content -LiteralPath $AssetsPath -Raw | ConvertFrom-Json
-    $runtimeLibraries = @(
-        $assets.libraries.PSObject.Properties |
-            Where-Object { $_.Name -like 'Microsoft.WindowsAppSDK.Runtime/*' }
-    )
-    if ($runtimeLibraries.Count -ne 1) {
-        throw "Expected one Microsoft.WindowsAppSDK.Runtime package in $AssetsPath, found $($runtimeLibraries.Count)."
-    }
-
-    $packageRelativePath = [string]$runtimeLibraries[0].Value.path
-    $packageDirectory = $null
-    foreach ($packageRoot in @($assets.packageFolders.PSObject.Properties.Name)) {
-        $candidate = Join-Path $packageRoot $packageRelativePath
-        if (Test-Path -LiteralPath $candidate -PathType Container) {
-            $packageDirectory = $candidate
-            break
-        }
-    }
-    if ($null -eq $packageDirectory) {
-        throw "Could not find the restored Microsoft.WindowsAppSDK.Runtime package: $packageRelativePath"
-    }
-
-    $runtimeMsixDirectory = Join-Path $packageDirectory 'tools\MSIX\win10-x64'
-    $runtimeMsixFiles = @(Get-ChildItem -LiteralPath $runtimeMsixDirectory -Filter '*.msix' -File)
-    if ($runtimeMsixFiles.Count -eq 0) {
-        throw "No x64 Windows App Runtime MSIX was found under $runtimeMsixDirectory."
-    }
-
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $resourceName = 'Microsoft.WindowsAppRuntime.Insights.Resource.dll'
-    $resourcePath = Join-Path $DestinationDirectory $resourceName
-    $resourceSource = $null
-    foreach ($runtimeMsix in $runtimeMsixFiles) {
-        $archive = [System.IO.Compression.ZipFile]::OpenRead($runtimeMsix.FullName)
-        try {
-            $entry = $archive.GetEntry($resourceName)
-            if ($null -eq $entry) {
-                continue
-            }
-
-            $sourceStream = $entry.Open()
-            try {
-                $destinationStream = [System.IO.File]::Create($resourcePath)
-                try {
-                    $sourceStream.CopyTo($destinationStream)
-                }
-                finally {
-                    $destinationStream.Dispose()
-                }
-            }
-            finally {
-                $sourceStream.Dispose()
-            }
-
-            $resourceSource = $runtimeMsix.FullName
-            break
-        }
-        finally {
-            $archive.Dispose()
-        }
-    }
-
-    if ($null -eq $resourceSource) {
-        throw "$resourceName was not found in the restored x64 Windows App Runtime package."
-    }
-
-    $signature = Get-AuthenticodeSignature -LiteralPath $resourcePath
-    if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
-        throw "$resourceName has an invalid Authenticode signature: $($signature.StatusMessage)"
-    }
-
-    Write-Verbose "Copied $resourceName from $resourceSource."
-}
-
 $repoRoot = Get-NormalizedPath (Join-Path $PSScriptRoot '..')
 $projectPath = Join-Path $repoRoot 'src\TaskbarQuota.App\TaskbarQuota.App.csproj'
-$assetsPath = Join-Path $repoRoot 'src\TaskbarQuota.App\obj\project.assets.json'
 $installRootPath = Assert-SafeInstallRoot $InstallRoot
 $currentPath = Join-Path $installRootPath 'current'
 $previousPath = Join-Path $installRootPath 'previous'
@@ -196,10 +111,6 @@ try {
         throw "dotnet publish failed with exit code $LASTEXITCODE."
     }
 
-    Copy-WindowsAppRuntimeNotificationResource `
-        -AssetsPath $assetsPath `
-        -DestinationDirectory $stagingPath
-
     $buildRoot = Join-Path $repoRoot 'src\TaskbarQuota.App\bin\x64\Release\net10.0-windows10.0.19041.0\win-x64'
     $xbfFiles = @(Get-ChildItem -LiteralPath $buildRoot -Filter '*.xbf' -Recurse -File)
     if ($xbfFiles.Count -eq 0) {
@@ -230,6 +141,17 @@ try {
         if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
             throw "Publish output is missing $relativePath."
         }
+    }
+
+    $notificationResourceName = 'Microsoft.WindowsAppRuntime.Insights.Resource.dll'
+    $notificationResourcePath = Join-Path $stagingPath $notificationResourceName
+    $notificationResourceSignature = Get-AuthenticodeSignature -LiteralPath $notificationResourcePath
+    $notificationResourceSigner = $notificationResourceSignature.SignerCertificate.Subject
+    if ($notificationResourceSignature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+        throw "$notificationResourceName has an invalid Authenticode signature: $($notificationResourceSignature.StatusMessage)"
+    }
+    if ($notificationResourceSigner -notmatch '(^|, )O=Microsoft Corporation(,|$)') {
+        throw "$notificationResourceName was not signed by Microsoft Corporation: $notificationResourceSigner"
     }
 
     $buildInfo = @(
