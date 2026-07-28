@@ -5,6 +5,8 @@ The `codex/integration-all-features` branch combines:
 - `feature/quota-replenishment-notifications`
 - `feature/widget-visibility-policy`
 - `fix/startallback-taskbar-overlap`
+- `codex/fix-compiler-warnings`
+- `codex/deps-sqlite-vulnerability`
 
 It is intended for testing those changes together. Keep feature work on its source branch and merge new commits into the integration branch; do not amend or force-push commits that have already been integrated.
 
@@ -18,6 +20,8 @@ git fetch origin
 git merge --no-ff feature/quota-replenishment-notifications
 git merge --no-ff feature/widget-visibility-policy
 git merge --no-ff fix/startallback-taskbar-overlap
+git merge --no-ff codex/fix-compiler-warnings
+git merge --no-ff codex/deps-sqlite-vulnerability
 dotnet test tests\TaskbarQuota.Tests\TaskbarQuota.Tests.csproj -c Debug -p:Platform=x64
 git push origin codex/integration-all-features
 ```
