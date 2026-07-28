@@ -7,6 +7,8 @@ The `codex/integration-all-features` branch combines:
 - `fix/startallback-taskbar-overlap`
 - `codex/fix-compiler-warnings`
 - `codex/deps-sqlite-vulnerability`
+- `codex/fix-widget-visibility-crash`
+- `codex/fix-self-contained-notification-runtime`
 
 It is intended for testing those changes together. Keep feature work on its source branch and merge new commits into the integration branch; do not amend or force-push commits that have already been integrated.
 
@@ -22,6 +24,8 @@ git merge --no-ff feature/widget-visibility-policy
 git merge --no-ff fix/startallback-taskbar-overlap
 git merge --no-ff codex/fix-compiler-warnings
 git merge --no-ff codex/deps-sqlite-vulnerability
+git merge --no-ff codex/fix-widget-visibility-crash
+git merge --no-ff codex/fix-self-contained-notification-runtime
 dotnet test tests\TaskbarQuota.Tests\TaskbarQuota.Tests.csproj -c Debug -p:Platform=x64
 git push origin codex/integration-all-features
 ```
@@ -43,7 +47,7 @@ Quit every running TaskbarQuota instance first. Preview and then publish:
 .\scripts\Publish-LocalIntegration.ps1
 ```
 
-The helper validates the executable, PRI, and loose XBF resources before replacing the current build. It keeps the prior build at:
+The helper validates the executable, PRI, loose XBF resources, and the signed notification runtime resource before replacing the current build. It resolves the notification resource from the restored `Microsoft.WindowsAppSDK.Runtime` NuGet package, so it stays aligned with the package version used by the project. It keeps the prior build at:
 
 ```text
 %LOCALAPPDATA%\TaskbarQuota-Integration\previous
