@@ -246,6 +246,16 @@ namespace TaskbarQuota.Taskbar
             var providers = coordinator.WidgetDisplayProviders;
             var decision = EvaluateVisibilityDecision(providers, hideImmediately);
             bool visible = decision.ShouldShowWidget && providers.Count > 0;
+            SyncWidgetState(providers, decision, visible, hydrate);
+        }
+
+        private static void SyncWidgetState(
+            IReadOnlyList<ProviderId> providers,
+            WidgetVisibilityDecision decision,
+            bool visible,
+            bool hydrate = true)
+        {
+            var coordinator = UsageCoordinator.Instance;
             bool needsFetch = false;
 
             foreach (var widget in Widgets.Values.ToArray())
@@ -348,7 +358,7 @@ namespace TaskbarQuota.Taskbar
             // before showing it; transitions that keep it visible do no content work at all.
             if (visible && !_lastWidgetVisible)
             {
-                SyncWidgetState();
+                SyncWidgetState(providers, decision, visible);
                 return;
             }
 
@@ -587,6 +597,7 @@ namespace TaskbarQuota.Taskbar
             UsageCoordinator.Instance.ActiveToolPresenceChanged -= OnActiveToolPresenceChanged;
             UsageCoordinator.Instance.SupportedSurfacesChanged -= OnSupportedSurfacesChanged;
             WidgetSettingsService.Changed -= OnWidgetSettingsChanged;
+            App.Quitting -= OnQuitting;
             _initialized = false;
             _widgetHealthTimer?.Stop();
             _widgetHealthTimer = null;

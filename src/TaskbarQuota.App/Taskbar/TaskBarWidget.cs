@@ -312,7 +312,12 @@ namespace TaskbarQuota.Taskbar
 
         private void ApplyTaskbarChildStyle()
         {
+            Marshal.SetLastPInvokeError(0);
             uint current = User32.GetWindowLong(hwnd, User32.GWL_STYLE);
+            int readError = Marshal.GetLastPInvokeError();
+            if (IsGetWindowLongFailure(current, readError))
+                throw new Win32Exception(readError, "Could not read the taskbar widget host style.");
+
             uint childStyle = ConvertToTaskbarChildStyle(current);
             if (childStyle == current)
                 return;
@@ -326,6 +331,9 @@ namespace TaskbarQuota.Taskbar
 
         internal static uint ConvertToTaskbarChildStyle(uint style)
             => (style & ~(uint)WindowStyles.WS_POPUP) | (uint)WindowStyles.WS_CHILD;
+
+        internal static bool IsGetWindowLongFailure(uint style, int error)
+            => style == 0 && error != 0;
 
         private bool IsParentedToTaskbar()
             => User32.GetAncestor(hwnd, GetAncestorFlags.GA_PARENT) == hwndShell;
