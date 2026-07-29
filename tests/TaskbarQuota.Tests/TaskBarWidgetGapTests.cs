@@ -38,6 +38,23 @@ public class TaskBarWidgetGapTests
         Assert.NotEqual(0u, result & User32.SWP_NOACTIVATE);
     }
 
+    [Theory]
+    [InlineData(false, false, false, true)]
+    [InlineData(true, true, true, true)]
+    [InlineData(false, false, true, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, true, false, false)]
+    public void IsVisibilitySynchronized_RequiresManagedAndNativeStateToMatchRequest(
+        bool requestedVisible,
+        bool managedVisible,
+        bool nativeVisible,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            TaskBarWidget.IsVisibilitySynchronized(requestedVisible, managedVisible, nativeVisible));
+    }
+
     [Fact]
     public void ShouldReposition_BeforeFirstPlacement_IsTrueWithoutOverflowing()
     {
