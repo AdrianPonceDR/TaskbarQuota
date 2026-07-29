@@ -37,8 +37,19 @@ namespace TaskbarQuota
                 _ = new App();
             });
 
+            // H.NotifyIcon owns a separate foreground message-loop thread. If WinUI's dispatcher exits
+            // without App.Quit(), that thread otherwise keeps a zombie process and an unresponsive tray
+            // icon alive, and the single-instance redirect sends every later launch to that dead dispatcher.
+            if (ShouldTerminateAfterApplicationLoop(App.IsQuitting))
+            {
+                Log.Error("WinUI application loop exited unexpectedly; terminating the defunct tray process");
+                Environment.Exit(1);
+            }
+
             return 0;
         }
+
+        internal static bool ShouldTerminateAfterApplicationLoop(bool isQuitting) => !isQuitting;
 
         /// <summary>Returns true when this process handed its activation to the already running
         /// instance and should exit without creating an <see cref="App"/>.</summary>

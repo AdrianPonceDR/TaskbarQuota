@@ -50,4 +50,11 @@ public class AppStartupTests
         Assert.True(App.ShouldRetryTaskbarInitialization(App.TaskbarInitializationMaxAttempts - 1));
         Assert.False(App.ShouldRetryTaskbarInitialization(App.TaskbarInitializationMaxAttempts + 1));
     }
+
+    [Fact]
+    public void ShouldTerminateAfterApplicationLoop_WhenQuitWasNotRequested_ReturnsTrue()
+    {
+        Assert.True(Program.ShouldTerminateAfterApplicationLoop(isQuitting: false));
+        Assert.False(Program.ShouldTerminateAfterApplicationLoop(isQuitting: true));
+    }
 }
