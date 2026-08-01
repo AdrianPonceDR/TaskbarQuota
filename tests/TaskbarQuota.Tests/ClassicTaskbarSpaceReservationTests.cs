@@ -5,6 +5,8 @@ namespace TaskbarQuota.Tests;
 
 public class ClassicTaskbarSpaceReservationTests
 {
+    private const int WidgetWidth = 410;
+
     [Fact]
     public void TryApplyRight_AfterDispose_IsAlwaysANoOp()
     {
@@ -167,6 +169,172 @@ public class ClassicTaskbarSpaceReservationTests
         Assert.False(found);
         AssertRect(result, switcher.left, switcher.top, switcher.right, switcher.bottom);
     }
+
+    [Fact]
+    public void CustomPosition_ThatStillFits_KeepsThePreferredPosition()
+    {
+        var fallback = new ClassicTaskbarCustomPositionFallback();
+
+        ClassicCustomPositionDecision decision = fallback.Resolve(
+            preferredX: 1431,
+            gaps: G((761, 1841), (2201, 3281)),
+            widgetWidth: WidgetWidth,
+            canUseRightReservation: true);
+
+        Assert.False(decision.UseRightReservation);
+        Assert.Equal(1431, decision.FittingX);
+        Assert.False(fallback.IsActive);
+    }
+
+    [Fact]
+    public void CustomPosition_WhenNoGapFits_RequestsTraySideFallback()
+    {
+        var fallback = new ClassicTaskbarCustomPositionFallback();
+
+        ClassicCustomPositionDecision decision = fallback.Resolve(
+            preferredX: 1431,
+            gaps: G((0, 291), (399, 401)),
+            widgetWidth: WidgetWidth,
+            canUseRightReservation: true);
+
+        Assert.True(decision.UseRightReservation);
+        Assert.Null(decision.FittingX);
+        Assert.True(fallback.IsActive);
+    }
+
+    [Fact]
+    public void UnsupportedLayout_WithNoGap_KeepsExistingPlacementBehavior()
+    {
+        var fallback = new ClassicTaskbarCustomPositionFallback();
+
+        ClassicCustomPositionDecision decision = fallback.Resolve(
+            preferredX: 1431,
+            gaps: G((0, 291), (399, 401)),
+            widgetWidth: WidgetWidth,
+            canUseRightReservation: false);
+
+        Assert.False(decision.UseRightReservation);
+        Assert.Null(decision.FittingX);
+        Assert.False(fallback.IsActive);
+        Assert.Equal(1200, decision.PositionToPersist(reservationApplied: false, displayedX: 1200));
+    }
+
+    [Fact]
+    public void CustomFallback_UsesRightReservationAndPreservesPreferredPosition()
+    {
+        var fallback = new ClassicTaskbarCustomPositionFallback();
+        ClassicCustomPositionDecision decision = fallback.Resolve(
+            preferredX: 1431,
+            gaps: G((0, 291), (399, 401)),
+            widgetWidth: WidgetWidth,
+            canUseRightReservation: true);
+
+        bool found = ClassicTaskbarSpaceReservation.TryComputeRightPlacement(
+            R(0, 0, 3840, 90),
+            R(3281, 0, 3840, 90),
+            WidgetWidth,
+            clearance: 13,
+            out int fallbackX,
+            out _);
+
+        Assert.True(found);
+        Assert.Equal(2858, fallbackX);
+        Assert.Equal(1431, decision.PositionToPersist(reservationApplied: true, displayedX: fallbackX));
+    }
+
+    [Fact]
+    public void DefaultPosition_RemainsEligibleForClassicRightReservation()
+    {
+        Assert.True(TaskBarWidget.CanUseClassicRightReservation(
+            isVisible: true,
+            isPrimaryTaskbar: true,
+            hasNotificationArea: true,
+            isRtlUi: false));
+
+        Assert.True(ClassicTaskbarSpaceReservation.TryComputeRightPlacement(
+            R(0, 0, 3840, 90),
+            R(3281, 0, 3840, 90),
+            WidgetWidth,
+            clearance: 13,
+            out int offset,
+            out _));
+        Assert.Equal(2858, offset);
+    }
+
+    [Fact]
+    public void DragReset_CancelReactivation_AndHideReset_AreStable()
+    {
+        var fallback = new ClassicTaskbarCustomPositionFallback();
+        fallback.Resolve(1431, G((0, 291)), WidgetWidth, canUseRightReservation: true);
+        Assert.True(fallback.IsActive);
+
+        fallback.Reset();
+
+        Assert.False(fallback.IsActive);
+        fallback.Activate();
+        Assert.True(fallback.IsActive);
+        fallback.Reset();
+        Assert.False(fallback.IsActive);
+
+        ClassicCustomPositionDecision settled = fallback.Resolve(
+            1431,
+            G((761, 1841)),
+            WidgetWidth,
+            canUseRightReservation: true);
+        Assert.False(settled.UseRightReservation);
+        Assert.Equal(1431, settled.PositionToPersist(reservationApplied: false, displayedX: 1431));
+    }
+
+    [Fact]
+    public void RepeatedUpdates_DoNotOscillateAndRecoverOnlyAfterStableGap()
+    {
+        var fallback = new ClassicTaskbarCustomPositionFallback();
+        var crowded = G((0, 291), (399, 401));
+        var recovered = G((761, 1841));
+
+        for (int i = 0; i < 4; i++)
+            Assert.True(fallback.Resolve(1431, crowded, WidgetWidth, true).UseRightReservation);
+
+        Assert.True(fallback.Resolve(1431, recovered, WidgetWidth, true).UseRightReservation);
+        Assert.False(fallback.Resolve(1431, recovered, WidgetWidth, true).UseRightReservation);
+        Assert.False(fallback.Resolve(1431, recovered, WidgetWidth, true).UseRightReservation);
+        Assert.False(fallback.IsActive);
+    }
+
+    [Fact]
+    public void RecoveryRequiresPreferredGapToRemainAvailable()
+    {
+        var fallback = new ClassicTaskbarCustomPositionFallback();
+        fallback.Resolve(1431, G((0, 291)), WidgetWidth, true);
+
+        // Another wide gap exists, but the preferred x=1431 still does not fit in it completely.
+        Assert.True(fallback.Resolve(1431, G((700, 1800)), WidgetWidth, true).UseRightReservation);
+        Assert.True(fallback.Resolve(1431, G((900, 1900)), WidgetWidth, true).UseRightReservation);
+        Assert.False(fallback.Resolve(1431, G((900, 1900)), WidgetWidth, true).UseRightReservation);
+    }
+
+    [Fact]
+    public void ReservedSlot_DoesNotTriggerItsOwnRecoveryOrOscillation()
+    {
+        var fallback = new ClassicTaskbarCustomPositionFallback();
+        fallback.Resolve(2858, G((0, 291)), WidgetWidth, true);
+
+        for (int i = 0; i < 5; i++)
+        {
+            ClassicCustomPositionDecision decision = fallback.Resolve(
+                preferredX: 2858,
+                gaps: G((2858, 3268)),
+                widgetWidth: WidgetWidth,
+                canUseRightReservation: true,
+                reservedFallbackX: 2858);
+
+            Assert.True(decision.UseRightReservation);
+            Assert.True(fallback.IsActive);
+        }
+    }
+
+    private static List<(int start, int end)> G(params (int start, int end)[] gaps)
+        => new(gaps);
 
     private static RECT R(int left, int top, int right, int bottom)
         => new() { left = left, top = top, right = right, bottom = bottom };

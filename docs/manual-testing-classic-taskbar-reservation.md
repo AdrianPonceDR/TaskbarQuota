@@ -15,8 +15,9 @@ Record these details with the result:
 - TaskbarQuota widget display mode.
 
 For the original reproduction, use Windows 11 with StartAllBack and configure taskbar buttons to **Never
-combine**. The automated reservation currently applies only to the default position on a left-to-right,
-primary classic taskbar that exposes `TrayNotifyWnd` and the complete
+combine**. The automated reservation applies to the default position, and temporarily to a custom position
+when no complete gap can hold it, on a left-to-right primary classic taskbar that exposes `TrayNotifyWnd`
+and the complete
 `ReBarWindow32` → `MSTaskSwWClass` → `MSTaskListWClass` hierarchy.
 
 ## Crowded classic taskbar
@@ -50,11 +51,20 @@ Repeat the following while enough windows are open to make an incorrect reservat
    the tray-side reservation.
 3. Begin moving the widget from the tray menu and cancel with Escape. The reservation must be released
    while moving and restored at the default tray-side position after cancellation.
-4. Complete a drag to a custom position. A custom position must remain usable and the automatic classic
-   reservation must stay released.
-5. Choose **Reset position**. The widget must return to the reserved tray-side slot.
-6. Quit TaskbarQuota. No permanent blank region may remain in the taskbar.
-7. Relaunch TaskbarQuota and restart Explorer once. The widget and reservation must be recreated without
+4. Complete a drag to a custom position that has enough free space. Confirm that the widget stays there and
+   the automatic classic reservation remains released.
+5. Open many separate windows until no gap can hold the widget. Wait one watcher interval and confirm that
+   the widget moves to the reserved slot immediately before `TrayNotifyWnd`, without any button beneath it.
+6. Close enough windows to recreate the original custom gap. Confirm that the widget returns to its saved
+   custom position only after the layout is stable, then remains there for at least ten seconds without
+   oscillation or flicker. Confirm that the saved position file still contains the custom X throughout.
+7. Repeat steps 4–6, then hide the widget while the fallback is active. The task switcher must regain its
+   original width; showing the widget must select the safe custom position or fallback again.
+8. Begin another drag while fallback is active and cancel with Escape. Confirm that settle restores a safe
+   resting position and no deferred hide leaves a permanent reserved gap.
+9. Choose **Reset position**. The widget must return to the reserved tray-side slot.
+10. Quit TaskbarQuota. No permanent blank region may remain in the taskbar.
+11. Relaunch TaskbarQuota and restart Explorer once. The widget and reservation must be recreated without
    requiring a settings change.
 
 ## Native Windows 11 regression check
@@ -73,8 +83,9 @@ native taskbar does not expose the complete classic hierarchy.
 - A secondary taskbar without `TrayNotifyWnd` follows the existing placement behavior and is not reserved.
 - Right-to-left taskbars follow the existing placement behavior; the classic reservation is intentionally
   limited to shortening the right edge so it never moves Start.
-- Custom widget positions do not resize the classic task switcher. Reset the position to test the automatic
-  reserved slot.
+- A custom widget position uses the ordinary gap solver while it fits. The classic task switcher is shortened
+  only while no complete gap can hold the widget; the tray-side X is a temporary display fallback, not a new
+  saved preference.
 - The visual result depends on how the active shell lays out and clips its task-button children. Passing the
   automated tests does not establish compatibility with a particular shell customization.
 
