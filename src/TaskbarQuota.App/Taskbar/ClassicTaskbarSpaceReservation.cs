@@ -467,9 +467,5 @@ namespace TaskbarQuota.Taskbar
     internal readonly record struct ClassicCustomPositionDecision(
         int PreferredX,
         int? FittingX,
-        bool UseRightReservation)
-    {
-        public int PositionToPersist(bool reservationApplied, int displayedX)
-            => UseRightReservation && reservationApplied ? PreferredX : displayedX;
-    }
+        bool UseRightReservation);
 }

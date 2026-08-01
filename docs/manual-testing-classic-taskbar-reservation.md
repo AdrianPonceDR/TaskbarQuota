@@ -60,8 +60,9 @@ Repeat the following while enough windows are open to make an incorrect reservat
    oscillation or flicker. Confirm that the saved position file still contains the custom X throughout.
 7. Repeat steps 4–6, then hide the widget while the fallback is active. The task switcher must regain its
    original width; showing the widget must select the safe custom position or fallback again.
-8. Begin another drag while fallback is active and cancel with Escape. Confirm that settle restores a safe
-   resting position and no deferred hide leaves a permanent reserved gap.
+8. While no gap can hold the widget, try to drag and release it. Confirm that it does not accept a new
+   position, returns to the reserved slot, and leaves the saved custom X unchanged. Repeat and cancel with
+   Escape; confirm that settle restores the same safe position and no deferred hide leaves a permanent gap.
 9. Choose **Reset position**. The widget must return to the reserved tray-side slot.
 10. Quit TaskbarQuota. No permanent blank region may remain in the taskbar.
 11. Relaunch TaskbarQuota and restart Explorer once. The widget and reservation must be recreated without
