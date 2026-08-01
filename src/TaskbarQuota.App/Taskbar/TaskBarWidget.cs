@@ -143,6 +143,7 @@ namespace TaskbarQuota.Taskbar
         // would recompute a resting position from the not-yet-saved offset and yank the widget away.
         private bool IsUserRepositioning => isDragging || isPointerTracking || isDirectDrag || isSettling;
         private bool isSettling;
+        private bool hideDeferredForReposition;
         private int draggingInnerOffsetX;
         // Where the drag currently sits, and the free gap it is tracking the cursor inside.
         private int? dragPreviewX;
@@ -351,9 +352,20 @@ namespace TaskbarQuota.Taskbar
             if (appWindow is null || destroyed)
                 return;
 
+            if (visible)
+                hideDeferredForReposition = false;
+
             bool nativeVisible = User32.IsWindowVisible(hwnd);
             if (IsVisibilitySynchronized(visible, isVisible, nativeVisible))
                 return;
+
+            if (ShouldDeferHide(visible, IsUserRepositioning))
+            {
+                if (!hideDeferredForReposition)
+                    Log.Debug("[visibility] hide deferred while widget repositioning");
+                hideDeferredForReposition = true;
+                return;
+            }
 
             isVisible = visible;
             if (visible)
@@ -365,9 +377,6 @@ namespace TaskbarQuota.Taskbar
                     isVisible = User32.IsWindowVisible(hwnd);
                 return;
             }
-
-            if (isDragging)
-                EndDragging(revert: true);
 
             classicTaskbarReservation.Restore();
 
@@ -385,6 +394,9 @@ namespace TaskbarQuota.Taskbar
             bool managedVisible,
             bool nativeVisible)
             => requestedVisible == managedVisible && requestedVisible == nativeVisible;
+
+        internal static bool ShouldDeferHide(bool requestedVisible, bool isUserRepositioning)
+            => !requestedVisible && isUserRepositioning;
 
         private bool TrySetNativeVisibility(bool visible)
         {
@@ -1157,6 +1169,7 @@ namespace TaskbarQuota.Taskbar
                 activeDragGap = null;
                 appWindow.Move(new PointInt32(currentOffsetX, currentOffsetY));
                 QueuePositionUpdate(TaskbarChangeReason.None);
+                ApplyDeferredHideAfterReposition();
                 return;
             }
             _ = SnapToValidPositionAsync(dragPreviewX ?? appWindow.Position.X);
@@ -1233,6 +1246,7 @@ namespace TaskbarQuota.Taskbar
             }
             isPointerTracking = false;
             isDirectDrag = false;
+            ApplyDeferredHideAfterReposition();
         }
 
         private void WidgetSummary_PointerCanceled(object sender, PointerRoutedEventArgs e)
@@ -1243,6 +1257,17 @@ namespace TaskbarQuota.Taskbar
             (sender as WidgetSummary)?.ReleasePointerCaptures();
             if (wasDirectDrag)
                 QueuePositionUpdate(TaskbarChangeReason.None);
+            ApplyDeferredHideAfterReposition();
+        }
+
+        private void ApplyDeferredHideAfterReposition()
+        {
+            if (!hideDeferredForReposition || IsUserRepositioning)
+                return;
+
+            hideDeferredForReposition = false;
+            Log.Debug("[visibility] applying deferred hide after widget repositioning");
+            SetVisible(false);
         }
 
         private void SetTilesHitTestVisible(bool visible)
@@ -1509,6 +1534,7 @@ namespace TaskbarQuota.Taskbar
             finally
             {
                 isSettling = false;
+                ApplyDeferredHideAfterReposition();
             }
         }
 
@@ -2108,6 +2134,7 @@ namespace TaskbarQuota.Taskbar
             disposedValue = true;
             initialized = false;
             isVisible = false;
+            hideDeferredForReposition = false;
             positionUpdateCancellation.Cancel();
             classicTaskbarReservation.Dispose();
             try { TrySetNativeVisibility(false); } catch { }

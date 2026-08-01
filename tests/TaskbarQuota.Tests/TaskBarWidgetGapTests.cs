@@ -65,6 +65,21 @@ public class TaskBarWidgetGapTests
             TaskBarWidget.IsVisibilitySynchronized(requestedVisible, managedVisible, nativeVisible));
     }
 
+    [Theory]
+    [InlineData(false, true, true)]
+    [InlineData(false, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, false, false)]
+    public void ShouldDeferHide_OnlyWhileAHideIntersectsRepositioning(
+        bool requestedVisible,
+        bool isUserRepositioning,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            TaskBarWidget.ShouldDeferHide(requestedVisible, isUserRepositioning));
+    }
+
     [Fact]
     public void ShouldReposition_BeforeFirstPlacement_IsTrueWithoutOverflowing()
     {
