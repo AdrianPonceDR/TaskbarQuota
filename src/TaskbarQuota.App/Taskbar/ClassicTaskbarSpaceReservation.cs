@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using TaskbarQuota.Diagnostics;
@@ -316,5 +317,159 @@ namespace TaskbarQuota.Taskbar
                 FailureLogged = false;
             }
         }
+    }
+
+    /// <summary>
+    /// Keeps a custom-position fallback reserved until the preferred X has fitted completely twice in a row.
+    /// Placement still comes from <see cref="TaskBarWidget.PlaceInFittingGap"/>; this state only prevents
+    /// a transient taskbar layout from releasing and immediately recreating the classic reservation.
+    /// </summary>
+    internal sealed class ClassicTaskbarCustomPositionFallback
+    {
+        private const int StableGapObservationsRequired = 2;
+
+        private readonly object syncRoot = new();
+        private int? recoveryCandidateX;
+        private int recoveryCandidateObservations;
+        private bool isActive;
+
+        public bool IsActive
+        {
+            get
+            {
+                lock (syncRoot)
+                    return isActive;
+            }
+        }
+
+        public ClassicCustomPositionDecision Resolve(
+            int preferredX,
+            List<(int start, int end)> gaps,
+            int widgetWidth,
+            bool canUseRightReservation,
+            int? reservedFallbackX = null)
+        {
+            lock (syncRoot)
+            {
+                return ResolveCore(
+                    preferredX,
+                    gaps,
+                    widgetWidth,
+                    canUseRightReservation,
+                    reservedFallbackX);
+            }
+        }
+
+        private ClassicCustomPositionDecision ResolveCore(
+            int preferredX,
+            List<(int start, int end)> gaps,
+            int widgetWidth,
+            bool canUseRightReservation,
+            int? reservedFallbackX)
+        {
+            int? fittingX = TaskBarWidget.PlaceInFittingGap(preferredX, gaps, widgetWidth);
+            if (!canUseRightReservation)
+            {
+                ResetCore();
+                return new ClassicCustomPositionDecision(preferredX, fittingX, false);
+            }
+
+            if (fittingX is not { } candidateX)
+            {
+                isActive = true;
+                ResetRecoveryCandidate();
+                return new ClassicCustomPositionDecision(preferredX, null, true);
+            }
+
+            if (!isActive)
+            {
+                ResetRecoveryCandidate();
+                return new ClassicCustomPositionDecision(preferredX, candidateX, false);
+            }
+
+            // The active reservation creates its own tray-side gap. That gap must not count as evidence that
+            // the saved custom position is safe again, or every poll would alternate between custom and
+            // fallback. Recover only when the preferred X itself fits completely in an observed gap.
+            if (!FitsEntirelyInGap(preferredX, gaps, widgetWidth, reservedFallbackX))
+            {
+                ResetRecoveryCandidate();
+                return new ClassicCustomPositionDecision(preferredX, candidateX, true);
+            }
+
+            if (recoveryCandidateX == preferredX)
+            {
+                recoveryCandidateObservations++;
+            }
+            else
+            {
+                recoveryCandidateX = preferredX;
+                recoveryCandidateObservations = 1;
+            }
+
+            if (recoveryCandidateObservations < StableGapObservationsRequired)
+                return new ClassicCustomPositionDecision(preferredX, candidateX, true);
+
+            isActive = false;
+            ResetRecoveryCandidate();
+            return new ClassicCustomPositionDecision(preferredX, preferredX, false);
+        }
+
+        public void Reset()
+        {
+            lock (syncRoot)
+                ResetCore();
+        }
+
+        public void Activate()
+        {
+            lock (syncRoot)
+            {
+                isActive = true;
+                ResetRecoveryCandidate();
+            }
+        }
+
+        private void ResetCore()
+        {
+            isActive = false;
+            ResetRecoveryCandidate();
+        }
+
+        private void ResetRecoveryCandidate()
+        {
+            recoveryCandidateX = null;
+            recoveryCandidateObservations = 0;
+        }
+
+        private static bool FitsEntirelyInGap(
+            int positionX,
+            List<(int start, int end)> gaps,
+            int widgetWidth,
+            int? reservedFallbackX)
+        {
+            long positionRight = (long)positionX + widgetWidth;
+            if (reservedFallbackX is { } fallbackX
+                && positionX < (long)fallbackX + widgetWidth
+                && positionRight > fallbackX)
+            {
+                return false;
+            }
+
+            foreach (var (start, end) in gaps)
+            {
+                if (positionX >= start && positionRight <= end)
+                    return true;
+            }
+            return false;
+        }
+    }
+
+    internal readonly record struct ClassicCustomPositionDecision(
+        int PreferredX,
+        int? FittingX,
+        bool UseRightReservation)
+    {
+        public int PositionToPersist(bool reservationApplied, int displayedX)
+            => UseRightReservation && reservationApplied ? PreferredX : displayedX;
     }
 }

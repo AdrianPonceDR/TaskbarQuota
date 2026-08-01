@@ -105,16 +105,14 @@ public class TaskBarWidgetGapTests
     }
 
     [Theory]
-    [InlineData(true, true, true, true, false, true)]
-    [InlineData(false, true, true, true, false, false)]
-    [InlineData(true, false, true, true, false, false)]
-    [InlineData(true, true, false, true, false, false)]
-    [InlineData(true, true, true, false, false, false)]
-    [InlineData(true, true, true, true, true, false)]
+    [InlineData(true, true, true, false, true)]
+    [InlineData(false, true, true, false, false)]
+    [InlineData(true, false, true, false, false)]
+    [InlineData(true, true, false, false, false)]
+    [InlineData(true, true, true, true, false)]
     public void CanUseClassicRightReservation_RequiresEverySupportedCondition(
         bool isVisible,
         bool isPrimaryTaskbar,
-        bool useDefault,
         bool hasNotificationArea,
         bool isRtlUi,
         bool expected)
@@ -124,7 +122,6 @@ public class TaskBarWidgetGapTests
             TaskBarWidget.CanUseClassicRightReservation(
                 isVisible,
                 isPrimaryTaskbar,
-                useDefault,
                 hasNotificationArea,
                 isRtlUi));
     }
