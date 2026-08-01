@@ -205,6 +205,19 @@ public class TaskBarWidgetGapTests
         Assert.Null(TaskBarWidget.PlaceInFittingGap(50, gaps, 172));
     }
 
+    [Theory]
+    [InlineData(false, null, false)]
+    [InlineData(true, null, false)]
+    [InlineData(false, 650, false)]
+    [InlineData(true, 650, true)]
+    public void CanCommitDraggedPosition_RequiresActualMoveIntoAStillFittingGap(
+        bool movedIntoFittingGap,
+        int? fittingX,
+        bool expected)
+    {
+        Assert.Equal(expected, TaskBarWidget.CanCommitDraggedPosition(movedIntoFittingGap, fittingX));
+    }
+
     // The drag itself is unconstrained (issue #21): it only clamps to the span, so it can never stall or
     // skip a zone. Snapping to a free gap happens once, on release.
     [Fact]

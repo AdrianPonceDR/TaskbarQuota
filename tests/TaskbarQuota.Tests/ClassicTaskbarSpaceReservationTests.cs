@@ -216,7 +216,6 @@ public class ClassicTaskbarSpaceReservationTests
         Assert.False(decision.UseRightReservation);
         Assert.Null(decision.FittingX);
         Assert.False(fallback.IsActive);
-        Assert.Equal(1200, decision.PositionToPersist(reservationApplied: false, displayedX: 1200));
     }
 
     [Fact]
@@ -239,7 +238,7 @@ public class ClassicTaskbarSpaceReservationTests
 
         Assert.True(found);
         Assert.Equal(2858, fallbackX);
-        Assert.Equal(1431, decision.PositionToPersist(reservationApplied: true, displayedX: fallbackX));
+        Assert.Equal(1431, decision.PreferredX);
     }
 
     [Fact]
@@ -282,7 +281,7 @@ public class ClassicTaskbarSpaceReservationTests
             WidgetWidth,
             canUseRightReservation: true);
         Assert.False(settled.UseRightReservation);
-        Assert.Equal(1431, settled.PositionToPersist(reservationApplied: false, displayedX: 1431));
+        Assert.Equal(1431, settled.PreferredX);
     }
 
     [Fact]
