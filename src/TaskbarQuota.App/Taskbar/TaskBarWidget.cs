@@ -18,7 +18,6 @@ using TaskbarQuota.Controls;
 using TaskbarQuota.Diagnostics;
 using TaskbarQuota.Interop;
 using TaskbarQuota.Usage;
-using Anim = Microsoft.UI.Xaml.Media.Animation;
 
 namespace TaskbarQuota.Taskbar
 {
@@ -123,9 +122,6 @@ namespace TaskbarQuota.Taskbar
         private bool loggedMissingPanel;
         private DesktopWindowXamlSource? host;
         private Microsoft.UI.Xaml.FrameworkElement? hostContent;
-        private const int HostFadeMilliseconds = 100;
-        private Anim.Storyboard? hostFadeStoryboard;
-        private int hostFadeGeneration;
         private int WidgetHostWidth;
         private int currentOffsetX = int.MinValue;
         private int currentOffsetY = 0;
@@ -352,26 +348,21 @@ namespace TaskbarQuota.Taskbar
 
         public void SetVisible(bool visible)
         {
-            if (appWindow is null || isVisible == visible)
+            if (appWindow is null || destroyed)
+                return;
+
+            bool nativeVisible = User32.IsWindowVisible(hwnd);
+            if (IsVisibilitySynchronized(visible, isVisible, nativeVisible))
                 return;
 
             isVisible = visible;
-            hostFadeGeneration++;
             if (visible)
             {
                 QueuePositionUpdate(TaskbarChangeReason.None);
-                if (!User32.IsWindowVisible(hwnd))
-                {
-                    if (hostContent is { } hiddenContent)
-                        hiddenContent.Opacity = 0;
-                    if (!TrySetNativeVisibility(true))
-                    {
-                        isVisible = User32.IsWindowVisible(hwnd);
-                        return;
-                    }
-                }
-
-                AnimateHostOpacity(1);
+                if (hostContent is { } visibleContent)
+                    visibleContent.Opacity = 1;
+                if (!nativeVisible && !TrySetNativeVisibility(true))
+                    isVisible = User32.IsWindowVisible(hwnd);
                 return;
             }
 
@@ -380,23 +371,20 @@ namespace TaskbarQuota.Taskbar
 
             classicTaskbarReservation.Restore();
 
-            if (hostContent is null)
-            {
-                if (!TrySetNativeVisibility(false))
-                    isVisible = User32.IsWindowVisible(hwnd);
-                return;
-            }
-
-            int generation = hostFadeGeneration;
-            AnimateHostOpacity(0, () =>
-            {
-                if (generation != hostFadeGeneration || destroyed || appWindow is null)
-                    return;
-
-                if (!TrySetNativeVisibility(false))
-                    isVisible = User32.IsWindowVisible(hwnd);
-            });
+            // Visibility changes can arrive back-to-back while a supported app updates. Do not leave a
+            // XAML Storyboard.Completed callback pending across that lifetime boundary: two dispatcher exits
+            // were observed immediately after this hide path, including one with the fade still pending.
+            if (hostContent is { } hiddenContent)
+                hiddenContent.Opacity = 0;
+            if (nativeVisible && !TrySetNativeVisibility(false))
+                isVisible = User32.IsWindowVisible(hwnd);
         }
+
+        internal static bool IsVisibilitySynchronized(
+            bool requestedVisible,
+            bool managedVisible,
+            bool nativeVisible)
+            => requestedVisible == managedVisible && requestedVisible == nativeVisible;
 
         private bool TrySetNativeVisibility(bool visible)
         {
@@ -429,49 +417,6 @@ namespace TaskbarQuota.Taskbar
                 | User32.SWP_NOZORDER
                 | User32.SWP_NOACTIVATE
                 | (visible ? User32.SWP_SHOWWINDOW : User32.SWP_HIDEWINDOW);
-
-        private void AnimateHostOpacity(double to, Action? completed = null)
-        {
-            if (hostContent is not { } content)
-            {
-                completed?.Invoke();
-                return;
-            }
-
-            // Read the animated value before stopping. If a show interrupts a hide, the new fade resumes
-            // from the frame currently on screen instead of jumping through fully transparent.
-            double from = content.Opacity;
-            hostFadeStoryboard?.Stop();
-            hostFadeStoryboard = null;
-            content.Opacity = to;
-
-            if (Math.Abs(from - to) < 0.01)
-            {
-                completed?.Invoke();
-                return;
-            }
-
-            var animation = new Anim.DoubleAnimation
-            {
-                From = from,
-                To = to,
-                Duration = new Microsoft.UI.Xaml.Duration(TimeSpan.FromMilliseconds(HostFadeMilliseconds)),
-                EasingFunction = new Anim.CubicEase { EasingMode = Anim.EasingMode.EaseOut },
-            };
-            Anim.Storyboard.SetTarget(animation, content);
-            Anim.Storyboard.SetTargetProperty(animation, "Opacity");
-
-            var storyboard = new Anim.Storyboard();
-            storyboard.Children.Add(animation);
-            storyboard.Completed += (_, _) =>
-            {
-                if (ReferenceEquals(hostFadeStoryboard, storyboard))
-                    hostFadeStoryboard = null;
-                completed?.Invoke();
-            };
-            hostFadeStoryboard = storyboard;
-            storyboard.Begin();
-        }
 
         public void Destroy() => appWindow?.Destroy();
 
@@ -2163,9 +2108,6 @@ namespace TaskbarQuota.Taskbar
             disposedValue = true;
             initialized = false;
             isVisible = false;
-            hostFadeGeneration++;
-            try { hostFadeStoryboard?.Stop(); } catch { }
-            hostFadeStoryboard = null;
             positionUpdateCancellation.Cancel();
             classicTaskbarReservation.Dispose();
             try { TrySetNativeVisibility(false); } catch { }
