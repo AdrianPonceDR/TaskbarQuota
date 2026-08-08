@@ -52,6 +52,14 @@ public class AppStartupTests
     }
 
     [Fact]
+    public void DispatcherShutdownMode_KeepsTrayDispatcherAliveWithoutXamlWindows()
+    {
+        Assert.Equal(
+            Microsoft.UI.Xaml.DispatcherShutdownMode.OnExplicitShutdown,
+            App.RequiredDispatcherShutdownMode);
+    }
+
+    [Fact]
     public void ShouldTerminateAfterApplicationLoop_WhenQuitWasNotRequested_ReturnsTrue()
     {
         Assert.True(Program.ShouldTerminateAfterApplicationLoop(isQuitting: false));
