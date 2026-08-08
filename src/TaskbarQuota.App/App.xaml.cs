@@ -22,6 +22,8 @@ namespace TaskbarQuota
                 ? WinRT.Interop.WindowNative.GetWindowHandle(w)
                 : IntPtr.Zero;
         internal const int TaskbarInitializationMaxAttempts = 20;
+        internal static DispatcherShutdownMode RequiredDispatcherShutdownMode
+            => Microsoft.UI.Xaml.DispatcherShutdownMode.OnExplicitShutdown;
         private const int TaskbarInitializationInitialDelayMilliseconds = 1500;
         private const int TaskbarInitializationRetryDelayMilliseconds = 2500;
 
@@ -32,6 +34,9 @@ namespace TaskbarQuota
 
         public App()
         {
+            // The taskbar host is a reparented XAML Window that Explorer can destroy and recreate.
+            // TaskbarQuota is a tray app, so losing the last XAML Window must not end its dispatcher.
+            DispatcherShutdownMode = RequiredDispatcherShutdownMode;
             InitializeComponent();
             UnhandledException += (_, e) =>
             {
